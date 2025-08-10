@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Phone, Users, AlertCircle, Settings, User, Plus, MapPin, Camera, Mic, Shield, Edit, Bell, ChevronRight } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Phone, Users, AlertCircle, Settings, User, Plus, MapPin, Camera, Mic, Shield, Edit, Bell, ChevronRight, Eye, EyeOff } from 'lucide-react';
 
 // Authentication Context
 const AuthContext = React.createContext();
@@ -8,6 +8,7 @@ const AuthContext = React.createContext();
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [users, setUsers] = useState([]); // Store registered users in memory
 
   const login = (userData) => {
     setUser(userData);
@@ -19,23 +20,43 @@ const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
   };
 
+  const registerUser = (userData) => {
+    const newUser = {
+      ...userData,
+      id: Date.now().toString(),
+      joinDate: new Date().toISOString().split('T')[0],
+      subscription: false
+    };
+    setUsers(prev => [...prev, newUser]);
+    return newUser;
+  };
+
+  const findUserByPhone = (phoneNumber) => {
+    return users.find(user => user.phoneNumber === phoneNumber);
+  };
+
+  const validateCredentials = (phoneNumber, password) => {
+    const user = findUserByPhone(phoneNumber);
+    return user && user.password === password ? user : null;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isAuthenticated, 
+      users,
+      login, 
+      logout, 
+      registerUser, 
+      findUserByPhone, 
+      validateCredentials 
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 // Mock Data
-const mockUser = {
-  id: '1',
-  name: 'John Doe',
-  phoneNumber: '+260123456789',
-  profilePicture: null,
-  subscription: false,
-  joinDate: '2024-01-15'
-};
-
 const mockCircles = [
   {
     id: '1',
@@ -74,14 +95,22 @@ const mockSOSRecords = [
   }
 ];
 
-// Splash Screen Component
-const SplashScreen = () => {
+// Phone Input Screen Component
+const PhoneInputScreen = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const navigate = useNavigate();
+  const { findUserByPhone } = React.useContext(AuthContext);
 
   const handlePhoneSubmit = () => {
     if (phoneNumber.length >= 10) {
-      navigate('/otp', { state: { phoneNumber } });
+      const existingUser = findUserByPhone(phoneNumber);
+      if (existingUser) {
+        // User exists, go to login
+        navigate('/login', { state: { phoneNumber, userExists: true } });
+      } else {
+        // New user, go to OTP verification for registration
+        navigate('/otp', { state: { phoneNumber, userExists: false } });
+      }
     }
   };
 
@@ -127,13 +156,121 @@ const SplashScreen = () => {
   );
 };
 
+// Login Screen Component
+const LoginScreen = () => {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { validateCredentials, login } = React.useContext(AuthContext);
+  
+  const phoneNumber = location.state?.phoneNumber || '';
+
+  const handleLogin = () => {
+    if (!password) {
+      setError('Please enter your password');
+      return;
+    }
+
+    const user = validateCredentials(phoneNumber, password);
+    if (user) {
+      login(user);
+      navigate('/dashboard');
+    } else {
+      setError('Invalid password. Please try again.');
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleLogin();
+    }
+  };
+
+  const goToForgotPassword = () => {
+    navigate('/otp', { state: { phoneNumber, userExists: true, resetPassword: true } });
+  };
+
+  return (
+    <div className="min-h-screen bg-white flex flex-col items-center p-5">
+      <div className="self-start text-sm text-gray-600 mb-8">9:41 AM</div>
+      
+      <h1 className="text-xl font-medium mb-4 text-center text-gray-800">Welcome Back</h1>
+      
+      <div className="text-sm text-center mb-2">
+        Logging in with
+      </div>
+      <div className="text-base font-bold mb-6 text-center">
+        {phoneNumber}
+      </div>
+      
+      <div className="w-full max-w-sm">
+        <div className="relative mb-4">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyPress={handleKeyPress}
+            className="w-full p-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+            autoComplete="current-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+          >
+            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
+        
+        {error && (
+          <div className="text-red-600 text-sm mb-4 text-center">
+            {error}
+          </div>
+        )}
+        
+        <button
+          onClick={handleLogin}
+          disabled={!password}
+          className="w-full p-3 text-base bg-blue-500 text-white border-none rounded-lg cursor-pointer hover:bg-blue-600 transition-colors mb-4 disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          Login
+        </button>
+        
+        <div className="text-center">
+          <button 
+            onClick={goToForgotPassword}
+            className="text-blue-600 underline bg-none border-none cursor-pointer text-sm"
+          >
+            Forgot Password?
+          </button>
+        </div>
+        
+        <div className="text-center mt-4">
+          <button 
+            onClick={() => navigate('/')}
+            className="text-gray-600 underline bg-none border-none cursor-pointer text-sm"
+          >
+            Use different phone number
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // OTP Screen Component
 const OTPScreen = () => {
   const [otpCode, setOtpCode] = useState('');
   const [generatedOTP, setGeneratedOTP] = useState('');
   const navigate = useNavigate();
-  const { state } = window.history;
-  const phoneNumber = state?.phoneNumber || '+260123456789';
+  const location = useLocation();
+  
+  const phoneNumber = location.state?.phoneNumber || '+260123456789';
+  const userExists = location.state?.userExists || false;
+  const resetPassword = location.state?.resetPassword || false;
 
   useEffect(() => {
     // Generate random 6-digit OTP for testing
@@ -150,7 +287,11 @@ const OTPScreen = () => {
 
   const verifyOTP = () => {
     if (otpCode === generatedOTP) {
-      navigate('/register');
+      if (resetPassword) {
+        navigate('/reset-password', { state: { phoneNumber } });
+      } else {
+        navigate('/register', { state: { phoneNumber } });
+      }
     } else {
       alert('Invalid OTP. Please try again.');
     }
@@ -162,14 +303,24 @@ const OTPScreen = () => {
     }
   };
 
+  const getTitle = () => {
+    if (resetPassword) return 'Reset Password';
+    return userExists ? 'Verify Phone Number' : 'Verify Phone Number';
+  };
+
+  const getMessage = () => {
+    if (resetPassword) return 'Enter the verification code to reset your password';
+    return 'We sent a verification code to verify your phone number';
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center p-5">
       <div className="self-start text-sm text-gray-600 mb-8">9:41 AM</div>
       
-      <h1 className="text-xl font-medium mb-4 text-center text-gray-800">Verify Phone Number</h1>
+      <h1 className="text-xl font-medium mb-4 text-center text-gray-800">{getTitle()}</h1>
       
       <div className="text-sm text-center mb-2">
-        We sent a verification code to
+        {getMessage()}
       </div>
       <div className="text-base font-bold mb-4 text-center">
         {phoneNumber}
@@ -219,16 +370,134 @@ const OTPScreen = () => {
   );
 };
 
+// Reset Password Screen Component
+const ResetPasswordScreen = () => {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { users, setUsers } = React.useContext(AuthContext);
+  
+  const phoneNumber = location.state?.phoneNumber || '';
+
+  const handleResetPassword = () => {
+    if (!newPassword || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    // Update user password in the users array
+    const updatedUsers = users.map(user => 
+      user.phoneNumber === phoneNumber 
+        ? { ...user, password: newPassword }
+        : user
+    );
+    
+    setUsers(updatedUsers);
+    
+    alert('Password reset successfully!');
+    navigate('/login', { state: { phoneNumber, userExists: true } });
+  };
+
+  return (
+    <div className="min-h-screen bg-white p-5">
+      <div className="text-right text-sm text-gray-600 mb-8">9:41 AM</div>
+      
+      <h1 className="text-xl font-medium mb-4 text-center text-gray-800">Reset Password</h1>
+      
+      <div className="text-sm text-gray-600 mb-5 text-center px-2">
+        Create a new password for {phoneNumber}
+      </div>
+      
+      <div className="max-w-sm mx-auto">
+        <div className="mb-4">
+          <label className="block mb-1.5 text-sm text-gray-700">New Password</label>
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full p-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+              placeholder="Enter new password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+        </div>
+        
+        <div className="mb-4">
+          <label className="block mb-1.5 text-sm text-gray-700">Confirm Password</label>
+          <div className="relative">
+            <input
+              type={showConfirmPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full p-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+              placeholder="Confirm new password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+            >
+              {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+        </div>
+        
+        {error && (
+          <div className="text-red-600 text-sm mb-4 text-center">
+            {error}
+          </div>
+        )}
+        
+        <button
+          onClick={handleResetPassword}
+          className="w-full p-3 text-base bg-blue-500 text-white border-none rounded-lg cursor-pointer hover:bg-blue-600 transition-colors"
+        >
+          Reset Password
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Register Screen Component
 const RegisterScreen = () => {
   const [formData, setFormData] = useState({
     name: '',
     age: '',
     gender: '',
-    location: ''
+    location: '',
+    password: '',
+    confirmPassword: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login } = React.useContext(AuthContext);
+  const location = useLocation();
+  const { registerUser, login } = React.useContext(AuthContext);
+  
+  const phoneNumber = location.state?.phoneNumber || '';
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -238,19 +507,36 @@ const RegisterScreen = () => {
   };
 
   const completeRegistration = () => {
-    if (formData.name && formData.age && formData.gender && formData.location) {
-      const userData = {
-        ...mockUser,
-        name: formData.name,
-        age: formData.age,
-        gender: formData.gender,
-        location: formData.location
-      };
-      login(userData);
-      navigate('/dashboard');
-    } else {
-      alert('Please fill in all fields');
+    const { name, age, gender, location, password, confirmPassword } = formData;
+    
+    if (!name || !age || !gender || !location || !password || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
     }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    const userData = {
+      name,
+      age,
+      gender,
+      location: location,
+      phoneNumber,
+      password,
+      profilePicture: null
+    };
+
+    const newUser = registerUser(userData);
+    login(newUser);
+    navigate('/dashboard');
   };
 
   const handleKeyPress = (e) => {
@@ -263,14 +549,14 @@ const RegisterScreen = () => {
     <div className="min-h-screen bg-white p-5">
       <div className="text-right text-sm text-gray-600 mb-8">9:41 AM</div>
       
-      <h1 className="text-xl font-medium mb-4 text-center text-gray-800">Complete Registration</h1>
+      <h1 className="text-xl font-medium mb-4 text-center text-gray-800">Create Account</h1>
       
       <div className="text-sm text-gray-600 mb-5 text-center px-2">
-        Please provide your details to complete your profile
+        Complete your profile for {phoneNumber}
       </div>
       
       <div className="max-w-sm mx-auto">
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="block mb-1.5 text-sm text-gray-700">Full Name</label>
           <input
             type="text"
@@ -283,7 +569,7 @@ const RegisterScreen = () => {
           />
         </div>
         
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="block mb-1.5 text-sm text-gray-700">Age</label>
           <input
             type="number"
@@ -297,7 +583,7 @@ const RegisterScreen = () => {
           />
         </div>
         
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="block mb-1.5 text-sm text-gray-700">Gender</label>
           <select
             value={formData.gender}
@@ -311,7 +597,7 @@ const RegisterScreen = () => {
           </select>
         </div>
         
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="block mb-1.5 text-sm text-gray-700">Location</label>
           <input
             type="text"
@@ -324,6 +610,54 @@ const RegisterScreen = () => {
           />
         </div>
         
+        <div className="mb-4">
+          <label className="block mb-1.5 text-sm text-gray-700">Password</label>
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={formData.password}
+              onChange={(e) => handleInputChange('password', e.target.value)}
+              onKeyPress={handleKeyPress}
+              className="w-full p-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+              placeholder="Create a password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+        </div>
+        
+        <div className="mb-4">
+          <label className="block mb-1.5 text-sm text-gray-700">Confirm Password</label>
+          <div className="relative">
+            <input
+              type={showConfirmPassword ? 'text' : 'password'}
+              value={formData.confirmPassword}
+              onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+              onKeyPress={handleKeyPress}
+              className="w-full p-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+              placeholder="Confirm your password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+            >
+              {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+        </div>
+        
+        {error && (
+          <div className="text-red-600 text-sm mb-4 text-center">
+            {error}
+          </div>
+        )}
+        
         <div className="w-full p-3.5 text-center border border-dashed border-gray-400 text-gray-700 text-sm mb-6 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
           Change Profile Picture
         </div>
@@ -332,7 +666,7 @@ const RegisterScreen = () => {
           onClick={completeRegistration}
           className="w-full p-3 text-base bg-blue-500 text-white border-none rounded-lg cursor-pointer hover:bg-blue-600 transition-colors"
         >
-          Complete Registration
+          Create Account
         </button>
       </div>
     </div>
@@ -672,9 +1006,11 @@ const SOSEmergencyApp = () => {
       <Router>
         <div className="max-w-sm mx-auto bg-white min-h-screen">
           <Routes>
-            <Route path="/" element={<SplashScreen />} />
+            <Route path="/" element={<PhoneInputScreen />} />
+            <Route path="/login" element={<LoginScreen />} />
             <Route path="/otp" element={<OTPScreen />} />
             <Route path="/register" element={<RegisterScreen />} />
+            <Route path="/reset-password" element={<ResetPasswordScreen />} />
             <Route 
               path="/dashboard" 
               element={
