@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/SOSapp/static/css/main.522866ed.css",
+    "main.js": "/SOSapp/static/js/main.28f86b04.js",
+    "index.html": "/SOSapp/index.html",
+    "main.522866ed.css.map": "/SOSapp/static/css/main.522866ed.css.map",
+    "main.28f86b04.js.map": "/SOSapp/static/js/main.28f86b04.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.522866ed.css",
+    "static/js/main.28f86b04.js"
+  ]
+}
