@@ -1,5 +1,5 @@
 import ReactDOM from 'react-dom/client'; // <-- Note the '/client'
-import App from './App';
+import App from './App2';
 import 'tailwindcss/tailwind.css';
 import * as serviceWorker from './serviceWorker';
 
